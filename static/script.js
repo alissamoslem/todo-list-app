@@ -8,7 +8,6 @@ const taskCount = document.querySelector("#task-count");
 const tasksRemainingCount = document.querySelector("#tasks-remaining-count");
 const tasksCompletedCount = document.querySelector("#tasks-completed-count");
 
-// جديد: الكلمات التي تظهر للمستخدم (غيّرها هنا إن أردت، مثل High / Medium / Low)
 const PRIORITY_NAMES = { 1: "Priority 1", 2: "Priority 2", 3: "Priority 3" };
 
 async function api(url, options = {}) {
@@ -18,6 +17,17 @@ async function api(url, options = {}) {
   });
   if (!response.ok) throw new Error(`Request failed: ${response.status}`);
   return response.status === 204 ? null : response.json();
+}
+
+// جديد: ترتيب المهام حسب الأولوية، وعند التساوي حسب رقم المهمة (أي ترتيب الإضافة)
+function sortTasks() {
+  const items = [...taskList.children];
+  items.sort(
+    (a, b) =>
+      Number(a.dataset.priority) - Number(b.dataset.priority) ||
+      Number(a.dataset.id) - Number(b.dataset.id)
+  );
+  items.forEach((item) => taskList.append(item));
 }
 
 function updateSummary() {
@@ -39,6 +49,10 @@ function renderTask(task) {
   item.className = "task-item";
   item.classList.toggle("is-complete", task.completed);
 
+  let priority = task.priority || 3;
+  item.dataset.id = task.id;          // جديد: نخزّن رقم المهمة على العنصر
+  item.dataset.priority = priority;   // جديد: ونخزّن أولويتها لنرتّب بها
+
   const checkbox = document.createElement("input");
   checkbox.type = "checkbox";
   checkbox.className = "task-checkbox";
@@ -49,8 +63,6 @@ function renderTask(task) {
   label.className = "task-text";
   label.textContent = task.text;
 
-  // جديد: قائمة منسدلة فيها الأولويات الثلاث مكتوبة بالكلمات
-  let priority = task.priority || 3;
   const prioritySelect = document.createElement("select");
   prioritySelect.setAttribute("aria-label", `Priority of “${task.text}”`);
   for (const value of [1, 2, 3]) {
@@ -61,7 +73,6 @@ function renderTask(task) {
   }
   prioritySelect.value = priority;
 
-  // جديد: تلوين القائمة حسب الأولوية الحالية
   function paintSelect() {
     prioritySelect.className = `priority-select priority-${priority}`;
   }
@@ -88,7 +99,6 @@ function renderTask(task) {
     }
   });
 
-  // جديد: عند اختيار أولوية من القائمة نحفظها في الخادم
   prioritySelect.addEventListener("change", async () => {
     const chosen = Number(prioritySelect.value);
     try {
@@ -97,9 +107,11 @@ function renderTask(task) {
         body: JSON.stringify({ priority: chosen }),
       });
       priority = chosen;
+      item.dataset.priority = chosen; // جديد: نحدّث الأولوية المخزّنة على العنصر
       paintSelect();
+      sortTasks();                    // جديد: نعيد ترتيب القائمة
     } catch {
-      prioritySelect.value = priority; // فشل الحفظ: نعيد القيمة القديمة
+      prioritySelect.value = priority;
       alert("Could not change the priority.");
     }
   });
@@ -114,7 +126,7 @@ function renderTask(task) {
     }
   });
 
-  item.append(checkbox, label, prioritySelect, deleteButton); // جديد: prioritySelect
+  item.append(checkbox, label, prioritySelect, deleteButton);
   taskList.append(item);
 }
 
@@ -152,6 +164,7 @@ async function loadTasks() {
   try {
     const tasks = await api("/api/tasks");
     tasks.forEach(renderTask);
+    sortTasks(); // جديد: ترتيب القائمة بعد تحميل المهام
   } catch {
     alert("Could not load tasks. Is the Go server running?");
   }
