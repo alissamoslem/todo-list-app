@@ -40,13 +40,35 @@ Dependencies are downloaded automatically from `go.mod` and `go.sum` the first t
 Then open [http://localhost:8080](http://localhost:8080) in your browser. Press `Ctrl + C` in the terminal to stop the server.
 ## API
 
-| Method | Route | Description |
-|--------|-------|-------------|
-| GET | `/api/tasks` | List all tasks |
-| POST | `/api/tasks` | Create a task |
-| PATCH | `/api/tasks/{id}` | Mark a task complete or incomplete |
-| DELETE | `/api/tasks/{id}` | Delete a task |
+| Method | Route             | Description                                       |
+|--------|-------------------|---------------------------------------------------|
+| GET    | `/api/tasks`      | List all tasks (each with its priority)           |
+| POST   | `/api/tasks`      | Create a task (starts with priority 3)            |
+| PATCH  | `/api/tasks/{id}` | Update a task's completed state and/or priority   |
+| DELETE | `/api/tasks/{id}` | Delete a task                                     |
 
+### Examples
+
+A task as returned by the API:
+
+```json
+{ "id": 1, "text": "Plan the week", "completed": false, "priority": 3 }
+```
+
+`POST /api/tasks` body:
+
+```json
+{ "text": "Plan the week" }
+```
+
+`PATCH /api/tasks/{id}` body (send either field or both):
+
+```json
+{ "completed": true }
+{ "priority": 1 }
+```
+
+`priority` must be 1, 2 or 3 (1 is the highest). Any other value returns `400`.
 ## Possible Improvements
 
 - Edit existing tasks
