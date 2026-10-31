@@ -5,13 +5,14 @@ A to-do list web app with a Go backend and a SQLite database, so tasks are saved
 ## Features
 
 - Add a single task, or several at once (one per line; blank lines are skipped)
+- Set a priority for each task (Priority 1, 2 or 3) from a dropdown next to it; new tasks start at Priority 3
+- Tasks are sorted by priority, and a task moves to its new place as soon as you change its priority
 - Mark tasks as complete or incomplete
 - Delete tasks
 - Live counters for total, remaining and completed tasks
-- Tasks are stored in a SQLite database and survive page refreshes and server restarts
+- Tasks and their priorities are stored in a SQLite database and survive page refreshes and server restarts
 - Responsive layout for desktop and mobile
-- Accessibility support: screen-reader labels, ARIA live regions, keyboard focus styles and reduced-motion support
-
+- Accessibility support: screen-reader labels (including the priority dropdown), ARIA live regions, keyboard focus styles and reduced-motion support
 ## Requirements
 
 - [Go](https://go.dev/dl/) 1.22 or newer
