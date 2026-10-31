@@ -29,14 +29,15 @@ A to-do list web app with a Go backend and a SQLite database, so tasks are saved
 
 ## Getting Started
 
-```bash
-go mod init todo-app
-go get modernc.org/sqlite
+```
+git clone https://github.com/Muslim03/My_to_do_list.git
+cd My_to_do_list
 go run .
 ```
 
-Then open http://localhost:8080 in your browser. Press `Ctrl + C` in the terminal to stop the server.
+Dependencies are downloaded automatically from `go.mod` and `go.sum` the first time you run the app.
 
+Then open [http://localhost:8080](http://localhost:8080) in your browser. Press `Ctrl + C` in the terminal to stop the server.
 ## API
 
 | Method | Route | Description |
