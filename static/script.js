@@ -8,6 +8,9 @@ const taskCount = document.querySelector("#task-count");
 const tasksRemainingCount = document.querySelector("#tasks-remaining-count");
 const tasksCompletedCount = document.querySelector("#tasks-completed-count");
 
+// جديد: الكلمات التي تظهر للمستخدم (غيّرها هنا إن أردت، مثل High / Medium / Low)
+const PRIORITY_NAMES = { 1: "Priority 1", 2: "Priority 2", 3: "Priority 3" };
+
 async function api(url, options = {}) {
   const response = await fetch(url, {
     headers: { "Content-Type": "application/json" },
@@ -46,6 +49,24 @@ function renderTask(task) {
   label.className = "task-text";
   label.textContent = task.text;
 
+  // جديد: قائمة منسدلة فيها الأولويات الثلاث مكتوبة بالكلمات
+  let priority = task.priority || 3;
+  const prioritySelect = document.createElement("select");
+  prioritySelect.setAttribute("aria-label", `Priority of “${task.text}”`);
+  for (const value of [1, 2, 3]) {
+    const option = document.createElement("option");
+    option.value = value;
+    option.textContent = PRIORITY_NAMES[value];
+    prioritySelect.append(option);
+  }
+  prioritySelect.value = priority;
+
+  // جديد: تلوين القائمة حسب الأولوية الحالية
+  function paintSelect() {
+    prioritySelect.className = `priority-select priority-${priority}`;
+  }
+  paintSelect();
+
   const deleteButton = document.createElement("button");
   deleteButton.type = "button";
   deleteButton.className = "delete-button";
@@ -67,6 +88,22 @@ function renderTask(task) {
     }
   });
 
+  // جديد: عند اختيار أولوية من القائمة نحفظها في الخادم
+  prioritySelect.addEventListener("change", async () => {
+    const chosen = Number(prioritySelect.value);
+    try {
+      await api(`/api/tasks/${task.id}`, {
+        method: "PATCH",
+        body: JSON.stringify({ priority: chosen }),
+      });
+      priority = chosen;
+      paintSelect();
+    } catch {
+      prioritySelect.value = priority; // فشل الحفظ: نعيد القيمة القديمة
+      alert("Could not change the priority.");
+    }
+  });
+
   deleteButton.addEventListener("click", async () => {
     try {
       await api(`/api/tasks/${task.id}`, { method: "DELETE" });
@@ -77,7 +114,7 @@ function renderTask(task) {
     }
   });
 
-  item.append(checkbox, label, deleteButton);
+  item.append(checkbox, label, prioritySelect, deleteButton); // جديد: prioritySelect
   taskList.append(item);
 }
 

@@ -81,3 +81,11 @@ h2 { margin: 0; font-size: 1.08rem; letter-spacing: -.02em; }
   .button-primary { min-height: 46px; }
 }
 @media (prefers-reduced-motion: reduce) { *, *::before, *::after { scroll-behavior: auto !important; animation-duration: .01ms !important; transition-duration: .01ms !important; } }
+
+/* جديد: قائمة الأولوية بالكلمات */
+.priority-select { flex: 0 0 auto; padding: 6px 8px; border: 1px solid currentColor; border-radius: 9px; background: #fff; font: inherit; font-size: .8rem; font-weight: 700; cursor: pointer; }
+.priority-select:focus-visible { outline: 3px solid rgba(37, 175, 231, .35); outline-offset: 2px; }
+.priority-1 { color: #c93636; } /* أحمر: الأعلى */
+.priority-2 { color: #d9791a; } /* برتقالي: المتوسطة */
+.priority-3 { color: #2f9a5b; } /* أخضر: الأدنى */
+.task-item.is-complete .priority-select { opacity: .5; }
