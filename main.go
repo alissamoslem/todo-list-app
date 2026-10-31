@@ -15,6 +15,7 @@ type Task struct {
 	ID        int64  `json:"id"`
 	Text      string `json:"text"`
 	Completed bool   `json:"completed"`
+	Priority  int    `json:"priority"` // جديد: 1 أحمر، 2 برتقالي، 3 أخضر
 }
 
 var db *sql.DB
@@ -32,9 +33,17 @@ func main() {
 		id         INTEGER PRIMARY KEY AUTOINCREMENT,
 		text       TEXT NOT NULL,
 		completed  INTEGER NOT NULL DEFAULT 0,
+		priority   INTEGER NOT NULL DEFAULT 3,
 		created_at DATETIME DEFAULT CURRENT_TIMESTAMP
-	)`)
+	)`) // جديد: عمود priority
 	if err != nil {
+		log.Fatal(err)
+	}
+
+	// جديد: لقاعدة بيانات todos.db القديمة التي لا تحتوي العمود.
+	// إن كان العمود موجودًا فسيظهر خطأ "duplicate column" ونتجاهله.
+	_, err = db.Exec("ALTER TABLE tasks ADD COLUMN priority INTEGER NOT NULL DEFAULT 3")
+	if err != nil && !strings.Contains(err.Error(), "duplicate column") {
 		log.Fatal(err)
 	}
 
@@ -56,7 +65,7 @@ func writeJSON(w http.ResponseWriter, status int, data any) {
 }
 
 func listTasks(w http.ResponseWriter, r *http.Request) {
-	rows, err := db.Query("SELECT id, text, completed FROM tasks ORDER BY id")
+	rows, err := db.Query("SELECT id, text, completed, priority FROM tasks ORDER BY id") // جديد
 	if err != nil {
 		http.Error(w, "database error", http.StatusInternalServerError)
 		return
@@ -67,7 +76,7 @@ func listTasks(w http.ResponseWriter, r *http.Request) {
 	for rows.Next() {
 		var t Task
 		var done int
-		if err := rows.Scan(&t.ID, &t.Text, &done); err != nil {
+		if err := rows.Scan(&t.ID, &t.Text, &done, &t.Priority); err != nil { // جديد
 			http.Error(w, "database error", http.StatusInternalServerError)
 			return
 		}
@@ -97,7 +106,7 @@ func createTask(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	id, _ := result.LastInsertId()
-	writeJSON(w, http.StatusCreated, Task{ID: id, Text: text})
+	writeJSON(w, http.StatusCreated, Task{ID: id, Text: text, Priority: 3}) // جديد
 }
 
 func updateTask(w http.ResponseWriter, r *http.Request) {
@@ -106,24 +115,49 @@ func updateTask(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "invalid id", http.StatusBadRequest)
 		return
 	}
+
+	// جديد: المؤشر (*) يسمح بمعرفة هل أرسل المتصفح الحقل أم لا
 	var body struct {
-		Completed bool `json:"completed"`
+		Completed *bool `json:"completed"`
+		Priority  *int  `json:"priority"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
 		http.Error(w, "invalid JSON", http.StatusBadRequest)
 		return
 	}
-
-	done := 0
-	if body.Completed {
-		done = 1
-	}
-	result, err := db.Exec("UPDATE tasks SET completed = ? WHERE id = ?", done, id)
-	if err != nil {
-		http.Error(w, "database error", http.StatusInternalServerError)
+	if body.Completed == nil && body.Priority == nil {
+		http.Error(w, "nothing to update", http.StatusBadRequest)
 		return
 	}
-	if n, _ := result.RowsAffected(); n == 0 {
+	if body.Priority != nil && (*body.Priority < 1 || *body.Priority > 3) {
+		http.Error(w, "priority must be 1, 2 or 3", http.StatusBadRequest)
+		return
+	}
+
+	var found int64
+	if body.Completed != nil {
+		done := 0
+		if *body.Completed {
+			done = 1
+		}
+		result, err := db.Exec("UPDATE tasks SET completed = ? WHERE id = ?", done, id)
+		if err != nil {
+			http.Error(w, "database error", http.StatusInternalServerError)
+			return
+		}
+		n, _ := result.RowsAffected()
+		found += n
+	}
+	if body.Priority != nil {
+		result, err := db.Exec("UPDATE tasks SET priority = ? WHERE id = ?", *body.Priority, id)
+		if err != nil {
+			http.Error(w, "database error", http.StatusInternalServerError)
+			return
+		}
+		n, _ := result.RowsAffected()
+		found += n
+	}
+	if found == 0 {
 		http.Error(w, "task not found", http.StatusNotFound)
 		return
 	}
