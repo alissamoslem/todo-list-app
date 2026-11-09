@@ -5,10 +5,11 @@ import (
 	"encoding/json"
 	"log"
 	"net/http"
+	"os" // تغيير MySQL: لقراءة اسم المستخدم وكلمة المرور من متغيرات البيئة
 	"strconv"
 	"strings"
 
-	_ "modernc.org/sqlite"
+	_ "github.com/go-sql-driver/mysql" // تغيير MySQL: مشغّل MySQL بدل مشغّل SQLite
 )
 
 type Task struct {
@@ -21,31 +22,27 @@ type Task struct {
 var db *sql.DB
 
 func main() {
+	// تغيير MySQL: نص الاتصال بالشكل user:password@tcp(host:port)/database
+	// parseTime=true: يحوّل أعمدة التاريخ إلى time.Time
+	// clientFoundRows=true: يجعل RowsAffected يعدّ الصفوف المطابقة وليس المتغيّرة فقط،
+	// وإلا يعيد MySQL الرقم 0 عند تحديث قيمة إلى نفسها فيظهر "task not found" خطأً
+	dsn := os.Getenv("DB_USER") + ":" + os.Getenv("DB_PASSWORD") +
+		"@tcp(127.0.0.1:3306)/todo_app?parseTime=true&clientFoundRows=true"
+
 	var err error
-	db, err = sql.Open("sqlite", "todos.db")
+	db, err = sql.Open("mysql", dsn) // تغيير MySQL: "mysql" بدل "sqlite"، واسم القاعدة todo_app داخل نص الاتصال
 	if err != nil {
 		log.Fatal(err)
 	}
 	defer db.Close()
-	db.SetMaxOpenConns(1)
 
-	_, err = db.Exec(`CREATE TABLE IF NOT EXISTS tasks (
-		id         INTEGER PRIMARY KEY AUTOINCREMENT,
-		text       TEXT NOT NULL,
-		completed  INTEGER NOT NULL DEFAULT 0,
-		priority   INTEGER NOT NULL DEFAULT 3,
-		created_at DATETIME DEFAULT CURRENT_TIMESTAMP
-	)`) // جديد: عمود priority
-	if err != nil {
-		log.Fatal(err)
+	// تغيير MySQL: Ping يتصل فعليًا بالخادم، فيظهر خطأ كلمة المرور أو توقف MySQL فورًا
+	if err := db.Ping(); err != nil {
+		log.Fatal("cannot connect to MySQL: ", err)
 	}
 
-	// جديد: لقاعدة بيانات todos.db القديمة التي لا تحتوي العمود.
-	// إن كان العمود موجودًا فسيظهر خطأ "duplicate column" ونتجاهله.
-	_, err = db.Exec("ALTER TABLE tasks ADD COLUMN priority INTEGER NOT NULL DEFAULT 3")
-	if err != nil && !strings.Contains(err.Error(), "duplicate column") {
-		log.Fatal(err)
-	}
+	// تغيير MySQL: حُذف db.SetMaxOpenConns(1) لأنه خاص بـ SQLite
+	// تغيير MySQL: حُذف CREATE TABLE و ALTER TABLE لأن الجدول يُنشأ من ملف schema.sql
 
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /api/tasks", listTasks)
@@ -64,8 +61,10 @@ func writeJSON(w http.ResponseWriter, status int, data any) {
 	json.NewEncoder(w).Encode(data)
 }
 
+// Try make it using ORM
 func listTasks(w http.ResponseWriter, r *http.Request) {
-	rows, err := db.Query("SELECT id, text, completed, priority FROM tasks ORDER BY id") // جديد
+	// تغيير MySQL: text → title و completed → is_completed (priority كما هو)
+	rows, err := db.Query("SELECT id, title, is_completed, priority FROM tasks ORDER BY id")
 	if err != nil {
 		http.Error(w, "database error", http.StatusInternalServerError)
 		return
@@ -76,7 +75,7 @@ func listTasks(w http.ResponseWriter, r *http.Request) {
 	for rows.Next() {
 		var t Task
 		var done int
-		if err := rows.Scan(&t.ID, &t.Text, &done, &t.Priority); err != nil { // جديد
+		if err := rows.Scan(&t.ID, &t.Text, &done, &t.Priority); err != nil {
 			http.Error(w, "database error", http.StatusInternalServerError)
 			return
 		}
@@ -100,7 +99,8 @@ func createTask(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	result, err := db.Exec("INSERT INTO tasks (text) VALUES (?)", text)
+	// تغيير MySQL: اسم العمود title بدل text. العمود priority يأخذ DEFAULT 3 من قاعدة البيانات
+	result, err := db.Exec("INSERT INTO tasks (title) VALUES (?)", text)
 	if err != nil {
 		http.Error(w, "database error", http.StatusInternalServerError)
 		return
@@ -140,7 +140,8 @@ func updateTask(w http.ResponseWriter, r *http.Request) {
 		if *body.Completed {
 			done = 1
 		}
-		result, err := db.Exec("UPDATE tasks SET completed = ? WHERE id = ?", done, id)
+		// تغيير MySQL: completed → is_completed. و MySQL يحدّث updated_at تلقائيًا
+		result, err := db.Exec("UPDATE tasks SET is_completed = ? WHERE id = ?", done, id)
 		if err != nil {
 			http.Error(w, "database error", http.StatusInternalServerError)
 			return
@@ -149,6 +150,7 @@ func updateTask(w http.ResponseWriter, r *http.Request) {
 		found += n
 	}
 	if body.Priority != nil {
+		// بدون تغيير: العمود priority له الاسم نفسه في MySQL
 		result, err := db.Exec("UPDATE tasks SET priority = ? WHERE id = ?", *body.Priority, id)
 		if err != nil {
 			http.Error(w, "database error", http.StatusInternalServerError)
@@ -170,6 +172,7 @@ func deleteTask(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "invalid id", http.StatusBadRequest)
 		return
 	}
+	// بدون تغيير: جملة DELETE نفسها تعمل في MySQL
 	if _, err := db.Exec("DELETE FROM tasks WHERE id = ?", id); err != nil {
 		http.Error(w, "database error", http.StatusInternalServerError)
 		return
