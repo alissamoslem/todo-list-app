@@ -57,7 +57,7 @@ The database is called `todo_app` and has one table, `tasks`:
 ### 1. Clone the repository
 
 ```bash
-git clone https://github.com/alissamoslem/My_to_do_list.git
+git clone https://github.com/alissamoslem/todo-list-app.git
 cd My_to_do_list
 ```
 
