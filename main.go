@@ -9,8 +9,18 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/joho/godotenv"
+
 	_ "github.com/go-sql-driver/mysql" // تغيير MySQL: مشغّل MySQL بدل مشغّل SQLite
 )
+
+// جديد: يقرأ متغير بيئة، ويستعمل القيمة الافتراضية إن كان فارغًا
+func getenv(key, fallback string) string {
+	if v := os.Getenv(key); v != "" {
+		return v
+	}
+	return fallback
+}
 
 type Task struct {
 	ID        int64  `json:"id"`
@@ -22,12 +32,18 @@ type Task struct {
 var db *sql.DB
 
 func main() {
+	// جديد: تحميل ملف .env إن وُجد. المتغيرات الموجودة أصلًا في الطرفية لها الأولوية.
+	if err := godotenv.Load(); err != nil {
+		log.Println("no .env file found, using environment variables")
+	}
 	// تغيير MySQL: نص الاتصال بالشكل user:password@tcp(host:port)/database
 	// parseTime=true: يحوّل أعمدة التاريخ إلى time.Time
 	// clientFoundRows=true: يجعل RowsAffected يعدّ الصفوف المطابقة وليس المتغيّرة فقط،
 	// وإلا يعيد MySQL الرقم 0 عند تحديث قيمة إلى نفسها فيظهر "task not found" خطأً
-	dsn := os.Getenv("DB_USER") + ":" + os.Getenv("DB_PASSWORD") +
-		"@tcp(127.0.0.1:3306)/todo_app?parseTime=true&clientFoundRows=true"
+	// جديد: كل قيمة تأتي من .env مع قيمة افتراضية مناسبة. كلمة المرور بلا قيمة افتراضية
+	dsn := getenv("DB_USER", "root") + ":" + os.Getenv("DB_PASSWORD") +
+		"@tcp(" + getenv("DB_HOST", "127.0.0.1") + ":" + getenv("DB_PORT", "3306") + ")/" +
+		getenv("DB_NAME", "todo_app") + "?parseTime=true&clientFoundRows=true"
 
 	var err error
 	db, err = sql.Open("mysql", dsn) // تغيير MySQL: "mysql" بدل "sqlite"، واسم القاعدة todo_app داخل نص الاتصال
@@ -51,8 +67,9 @@ func main() {
 	mux.HandleFunc("DELETE /api/tasks/{id}", deleteTask)
 	mux.Handle("/", http.FileServer(http.Dir("static")))
 
-	log.Println("Running at http://localhost:8080")
-	log.Fatal(http.ListenAndServe(":8080", mux))
+	addr := ":" + getenv("PORT", "8080") // جديد
+	log.Println("Running at http://localhost" + addr)
+	log.Fatal(http.ListenAndServe(addr, mux))
 }
 
 func writeJSON(w http.ResponseWriter, status int, data any) {

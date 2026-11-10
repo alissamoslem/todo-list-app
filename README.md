@@ -37,6 +37,7 @@ A full-stack to-do list web app. The page is plain HTML, CSS and JavaScript, the
 | `static/index.html` | Page structure and forms |
 | `static/style.css` | Layout, colours, animations and responsive rules |
 | `static/script.js` | Browser logic: sends requests to the API and updates the page |
+| `.env.example` | Template for the settings file. Copy it to `.env` and fill in your values |
 
 ## Database
 
@@ -79,9 +80,15 @@ DESCRIBE tasks;
 
 The script uses `CREATE DATABASE`, so running it a second time fails because `todo_app` already exists. To start again, run `DROP DATABASE todo_app;` first (this deletes all tasks).
 
-### 3. Set the database login
+### 3. Configure the database login
 
-The server reads the MySQL username and password from environment variables, so the password is never stored in the code.
+Copy the example settings file and put your MySQL password in it:
+
+```bash
+cp .env.example .env
+```
+
+On PowerShell use `Copy-Item .env.example .env`. Then open `.env` and set `DB_PASSWORD`. The `.env` file is ignored by Git, so your password is never committed.
 
 **PowerShell:**
 
@@ -136,7 +143,7 @@ Status codes: `200` OK, `201` created, `204` success with no content, `400` inva
 
 | Message | Cause and fix |
 |---------|---------------|
-| `Access denied for user ''@'localhost' (using password: NO)` | `DB_USER` and `DB_PASSWORD` are not set in this terminal. Set them again and rerun. |
+| `Access denied for user 'root'@'localhost' (using password: NO)` | `.env` is missing or `DB_PASSWORD` is empty. Copy `.env.example` to `.env` and fill it in. |terminal. Set them again and rerun. |
 | `Access denied for user 'root'@'localhost' (using password: YES)` | The password is wrong. Use the root password you chose when installing MySQL. |
 | `connection refused` or error `10061` | The MySQL server is not running. Check the MySQL service in Windows Services and start it. |
 | `Unknown database 'todo_app'` | `schema.sql` has not been run yet. |
