@@ -1,1 +1,10 @@
-run.ps1
+# Local secrets
+.env
+
+
+# Dependency folders
+vendor/
+node_modules/
+
+# Compiled programs
+*.exe
