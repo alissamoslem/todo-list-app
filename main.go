@@ -99,6 +99,10 @@ func listTasks(w http.ResponseWriter, r *http.Request) {
 		t.Completed = done == 1
 		tasks = append(tasks, t)
 	}
+	if err := rows.Err(); err != nil {
+		http.Error(w, "database error", http.StatusInternalServerError)
+		return
+	}
 	writeJSON(w, http.StatusOK, tasks)
 }
 
