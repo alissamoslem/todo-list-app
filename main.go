@@ -64,10 +64,10 @@ func main() {
 	mux.HandleFunc("POST /api/auth/login", loginHandler)
 	mux.HandleFunc("POST /api/auth/register", registerHandler)
 	mux.HandleFunc("GET /api/auth/me", authMiddleware(meHandler))
-	mux.HandleFunc("GET /api/tasks", listTasks)
-	mux.HandleFunc("POST /api/tasks", createTask)
-	mux.HandleFunc("PATCH /api/tasks/{id}", updateTask)
-	mux.HandleFunc("DELETE /api/tasks/{id}", deleteTask)
+	mux.HandleFunc("GET /api/tasks", authMiddleware(listTasks))
+	mux.HandleFunc("POST /api/tasks", authMiddleware(createTask))
+	mux.HandleFunc("PATCH /api/tasks/{id}", authMiddleware(updateTask))
+	mux.HandleFunc("DELETE /api/tasks/{id}", authMiddleware(deleteTask))
 	mux.Handle("/", http.FileServer(http.Dir("static")))
 
 	addr := ":" + getenv("PORT", "8080") // جديد
@@ -81,10 +81,25 @@ func writeJSON(w http.ResponseWriter, status int, data any) {
 	json.NewEncoder(w).Encode(data)
 }
 
-// Try make it using ORM
 func listTasks(w http.ResponseWriter, r *http.Request) {
-	// تغيير MySQL: text → title و completed → is_completed (priority كما هو)
-	rows, err := db.Query("SELECT id, title, is_completed, priority FROM tasks ORDER BY id")
+
+	// 1. Get the authenticated user ID from the JWT middleware
+	userID, ok := r.Context().Value(userIDKey).(int64)
+
+	if !ok {
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
+
+	// 2. Get only tasks belonging to this user
+	rows, err := db.Query(
+		`SELECT id, title, is_completed, priority
+         FROM tasks
+         WHERE user_id = ?
+         ORDER BY id`,
+		userID,
+	)
+
 	if err != nil {
 		http.Error(w, "database error", http.StatusInternalServerError)
 		return
@@ -92,114 +107,217 @@ func listTasks(w http.ResponseWriter, r *http.Request) {
 	defer rows.Close()
 
 	tasks := []Task{}
+
 	for rows.Next() {
 		var t Task
 		var done int
-		if err := rows.Scan(&t.ID, &t.Text, &done, &t.Priority); err != nil {
+
+		if err := rows.Scan(
+			&t.ID,
+			&t.Text,
+			&done,
+			&t.Priority,
+		); err != nil {
 			http.Error(w, "database error", http.StatusInternalServerError)
 			return
 		}
+
 		t.Completed = done == 1
 		tasks = append(tasks, t)
 	}
+
 	if err := rows.Err(); err != nil {
 		http.Error(w, "database error", http.StatusInternalServerError)
 		return
 	}
+
 	writeJSON(w, http.StatusOK, tasks)
 }
 
 func createTask(w http.ResponseWriter, r *http.Request) {
+
+	// Get the authenticated user ID from the middleware
+	userID, ok := r.Context().Value(userIDKey).(int64)
+	if !ok {
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
+
 	var body struct {
 		Text string `json:"text"`
 	}
+
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
 		http.Error(w, "invalid JSON", http.StatusBadRequest)
 		return
 	}
+
 	text := strings.TrimSpace(body.Text)
 	if text == "" {
 		http.Error(w, "text is required", http.StatusBadRequest)
 		return
 	}
 
-	// تغيير MySQL: اسم العمود title بدل text. العمود priority يأخذ DEFAULT 3 من قاعدة البيانات
-	result, err := db.Exec("INSERT INTO tasks (title) VALUES (?)", text)
+	// Save the task and its owner.
+	// MySQL will still use DEFAULT 3 for priority.
+	result, err := db.Exec(
+		"INSERT INTO tasks (title, user_id) VALUES (?, ?)",
+		text,
+		userID,
+	)
+
 	if err != nil {
 		http.Error(w, "database error", http.StatusInternalServerError)
 		return
 	}
+
 	id, _ := result.LastInsertId()
-	writeJSON(w, http.StatusCreated, Task{ID: id, Text: text, Priority: 3}) // جديد
+
+	writeJSON(w, http.StatusCreated, Task{
+		ID:       id,
+		Text:     text,
+		Priority: 3,
+	})
 }
 
 func updateTask(w http.ResponseWriter, r *http.Request) {
+	// 1. Get the authenticated user ID
+	userID, ok := r.Context().Value(userIDKey).(int64)
+	if !ok {
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
+
+	// 2. Read the task ID from the URL
 	id, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
-	if err != nil {
+	if err != nil || id <= 0 {
 		http.Error(w, "invalid id", http.StatusBadRequest)
 		return
 	}
 
-	// جديد: المؤشر (*) يسمح بمعرفة هل أرسل المتصفح الحقل أم لا
+	// 3. Decode the fields to update
 	var body struct {
 		Completed *bool `json:"completed"`
 		Priority  *int  `json:"priority"`
 	}
+
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
 		http.Error(w, "invalid JSON", http.StatusBadRequest)
 		return
 	}
+
 	if body.Completed == nil && body.Priority == nil {
 		http.Error(w, "nothing to update", http.StatusBadRequest)
 		return
 	}
-	if body.Priority != nil && (*body.Priority < 1 || *body.Priority > 3) {
+
+	if body.Priority != nil &&
+		(*body.Priority < 1 || *body.Priority > 3) {
 		http.Error(w, "priority must be 1, 2 or 3", http.StatusBadRequest)
 		return
 	}
 
-	var found int64
+	// 4. Check whether the task belongs to this user
+	var exists int
+
+	err = db.QueryRow(
+		"SELECT 1 FROM tasks WHERE id = ? AND user_id = ?",
+		id,
+		userID,
+	).Scan(&exists)
+
+	if err == sql.ErrNoRows {
+		http.Error(w, "task not found", http.StatusNotFound)
+		return
+	}
+
+	if err != nil {
+		http.Error(w, "database error", http.StatusInternalServerError)
+		return
+	}
+
+	// 5. Update completion if provided
 	if body.Completed != nil {
 		done := 0
 		if *body.Completed {
 			done = 1
 		}
-		// تغيير MySQL: completed → is_completed. و MySQL يحدّث updated_at تلقائيًا
-		result, err := db.Exec("UPDATE tasks SET is_completed = ? WHERE id = ?", done, id)
+
+		_, err := db.Exec(
+			`UPDATE tasks
+             SET is_completed = ?
+             WHERE id = ? AND user_id = ?`,
+			done,
+			id,
+			userID,
+		)
+
 		if err != nil {
 			http.Error(w, "database error", http.StatusInternalServerError)
 			return
 		}
-		n, _ := result.RowsAffected()
-		found += n
 	}
+
+	// 6. Update priority if provided
 	if body.Priority != nil {
-		// بدون تغيير: العمود priority له الاسم نفسه في MySQL
-		result, err := db.Exec("UPDATE tasks SET priority = ? WHERE id = ?", *body.Priority, id)
+		_, err := db.Exec(
+			`UPDATE tasks
+             SET priority = ?
+             WHERE id = ? AND user_id = ?`,
+			*body.Priority,
+			id,
+			userID,
+		)
+
 		if err != nil {
 			http.Error(w, "database error", http.StatusInternalServerError)
 			return
 		}
-		n, _ := result.RowsAffected()
-		found += n
 	}
-	if found == 0 {
-		http.Error(w, "task not found", http.StatusNotFound)
-		return
-	}
+
+	// 7. Return success
 	w.WriteHeader(http.StatusNoContent)
 }
 
 func deleteTask(w http.ResponseWriter, r *http.Request) {
+	// 1. Get the authenticated user ID
+	userID, ok := r.Context().Value(userIDKey).(int64)
+	if !ok {
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
+
+	// 2. Get the task ID from the URL
 	id, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
-	if err != nil {
+	if err != nil || id <= 0 {
 		http.Error(w, "invalid id", http.StatusBadRequest)
 		return
 	}
-	// بدون تغيير: جملة DELETE نفسها تعمل في MySQL
-	if _, err := db.Exec("DELETE FROM tasks WHERE id = ?", id); err != nil {
+
+	// 3. Delete only if the task belongs to this user
+	result, err := db.Exec(
+		"DELETE FROM tasks WHERE id = ? AND user_id = ?",
+		id,
+		userID,
+	)
+
+	if err != nil {
 		http.Error(w, "database error", http.StatusInternalServerError)
 		return
 	}
+
+	// 4. Check whether a task was deleted
+	affected, err := result.RowsAffected()
+	if err != nil {
+		http.Error(w, "database error", http.StatusInternalServerError)
+		return
+	}
+
+	if affected == 0 {
+		http.Error(w, "task not found", http.StatusNotFound)
+		return
+	}
+
+	// 5. Successful deletion
 	w.WriteHeader(http.StatusNoContent)
 }
