@@ -5,98 +5,163 @@ import (
 	"encoding/json"
 	"log"
 	"net/http"
-	"os" // تغيير MySQL: لقراءة اسم المستخدم وكلمة المرور من متغيرات البيئة
+	"os"
 	"strconv"
 	"strings"
+	"time"
 
+	"github.com/go-sql-driver/mysql"
 	"github.com/joho/godotenv"
-
-	_ "github.com/go-sql-driver/mysql" // تغيير MySQL: مشغّل MySQL بدل مشغّل SQLite
 )
 
-// جديد: يقرأ متغير بيئة، ويستعمل القيمة الافتراضية إن كان فارغًا
+// getenv reads an environment variable and uses a fallback if empty.
 func getenv(key, fallback string) string {
-	if v := os.Getenv(key); v != "" {
-		return v
+	if value := os.Getenv(key); value != "" {
+		return value
 	}
 	return fallback
+}
+
+// requireEnv ensures required environment variables are configured.
+func requireEnv(keys ...string) {
+	for _, key := range keys {
+		if os.Getenv(key) == "" {
+			log.Fatalf("%s environment variable is required", key)
+		}
+	}
 }
 
 type Task struct {
 	ID        int64  `json:"id"`
 	Text      string `json:"text"`
 	Completed bool   `json:"completed"`
-	Priority  int    `json:"priority"` // جديد: 1 أحمر، 2 برتقالي، 3 أخضر
+	Priority  int    `json:"priority"` // 1 red, 2 orange, 3 green
 }
 
 var db *sql.DB
 
 func main() {
-	// جديد: تحميل ملف .env إن وُجد. المتغيرات الموجودة أصلًا في الطرفية لها الأولوية.
+	// 1. Load .env for local development.
+	// Production hosts should provide environment variables directly.
 	if err := godotenv.Load(); err != nil {
-		log.Println("no .env file found, using environment variables")
+		log.Println("No .env file found; using environment variables")
 	}
-	// تغيير MySQL: نص الاتصال بالشكل user:password@tcp(host:port)/database
-	// parseTime=true: يحوّل أعمدة التاريخ إلى time.Time
-	// clientFoundRows=true: يجعل RowsAffected يعدّ الصفوف المطابقة وليس المتغيّرة فقط،
-	// وإلا يعيد MySQL الرقم 0 عند تحديث قيمة إلى نفسها فيظهر "task not found" خطأً
-	// جديد: كل قيمة تأتي من .env مع قيمة افتراضية مناسبة. كلمة المرور بلا قيمة افتراضية
-	dsn := getenv("DB_USER", "root") + ":" + os.Getenv("DB_PASSWORD") +
-		"@tcp(" + getenv("DB_HOST", "127.0.0.1") + ":" + getenv("DB_PORT", "3306") + ")/" +
-		getenv("DB_NAME", "todo_app") + "?parseTime=true&clientFoundRows=true"
 
+	// 2. Validate required configuration.
+	requireEnv(
+		"JWT_SECRET",
+		"DB_USER",
+		"DB_PASSWORD",
+		"DB_HOST",
+		"DB_PORT",
+		"DB_NAME",
+	)
+
+	// 3. Build MySQL configuration safely.
+	config := mysql.NewConfig()
+
+	config.User = os.Getenv("DB_USER")
+	config.Passwd = os.Getenv("DB_PASSWORD")
+	config.Net = "tcp"
+	config.Addr = os.Getenv("DB_HOST") + ":" + os.Getenv("DB_PORT")
+	config.DBName = os.Getenv("DB_NAME")
+
+	config.ParseTime = true
+	config.ClientFoundRows = true
+
+	dsn := config.FormatDSN()
+
+	// 4. Open the database connection pool.
 	var err error
-	db, err = sql.Open("mysql", dsn) // تغيير MySQL: "mysql" بدل "sqlite"، واسم القاعدة todo_app داخل نص الاتصال
+
+	db, err = sql.Open("mysql", dsn)
 	if err != nil {
-		log.Fatal(err)
+		log.Fatal("Cannot initialize MySQL: ", err)
 	}
 	defer db.Close()
 
-	// تغيير MySQL: Ping يتصل فعليًا بالخادم، فيظهر خطأ كلمة المرور أو توقف MySQL فورًا
+	// Configure connection pooling.
+	db.SetMaxOpenConns(10)
+	db.SetMaxIdleConns(5)
+	db.SetConnMaxLifetime(3 * time.Minute)
+
+	// Verify that MySQL is reachable.
 	if err := db.Ping(); err != nil {
-		log.Fatal("cannot connect to MySQL: ", err)
+		log.Fatal("Cannot connect to MySQL: ", err)
 	}
 
-	// تغيير MySQL: حُذف db.SetMaxOpenConns(1) لأنه خاص بـ SQLite
-	// تغيير MySQL: حُذف CREATE TABLE و ALTER TABLE لأن الجدول يُنشأ من ملف schema.sql
+	log.Println("Connected to MySQL successfully")
 
+	// 5. Configure HTTP routes.
 	mux := http.NewServeMux()
-	mux.HandleFunc("POST /api/auth/login", loginHandler)
+
+	// Authentication routes.
 	mux.HandleFunc("POST /api/auth/register", registerHandler)
+	mux.HandleFunc("POST /api/auth/login", loginHandler)
 	mux.HandleFunc("GET /api/auth/me", authMiddleware(meHandler))
+
+	// User task routes.
 	mux.HandleFunc("GET /api/tasks", authMiddleware(listTasks))
 	mux.HandleFunc("POST /api/tasks", authMiddleware(createTask))
 	mux.HandleFunc("PATCH /api/tasks/{id}", authMiddleware(updateTask))
 	mux.HandleFunc("DELETE /api/tasks/{id}", authMiddleware(deleteTask))
+
+	// Admin routes.
+	mux.HandleFunc(
+		"GET /api/admin/users",
+		authMiddleware(adminMiddleware(listUsers)),
+	)
+	mux.HandleFunc(
+		"GET /api/admin/tasks",
+		authMiddleware(adminMiddleware(listAllTasks)),
+	)
+	mux.HandleFunc(
+		"DELETE /api/admin/users/{id}",
+		authMiddleware(adminMiddleware(deleteUser)),
+	)
+
+	// Serve HTML, CSS, and JavaScript.
 	mux.Handle("/", http.FileServer(http.Dir("static")))
 
-	addr := ":" + getenv("PORT", "8080") // جديد
-	log.Println("Running at http://localhost" + addr)
-	log.Fatal(http.ListenAndServe(addr, mux))
+	// 6. Start the HTTP server.
+	port := getenv("PORT", "8080")
+	addr := ":" + port
+
+	server := &http.Server{
+		Addr:              addr,
+		Handler:           mux,
+		ReadHeaderTimeout: 5 * time.Second,
+	}
+
+	log.Printf("Server listening on %s", addr)
+
+	log.Fatal(server.ListenAndServe())
 }
 
+// writeJSON sends a JSON response with the requested HTTP status.
 func writeJSON(w http.ResponseWriter, status int, data any) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(status)
-	json.NewEncoder(w).Encode(data)
+
+	if err := json.NewEncoder(w).Encode(data); err != nil {
+		log.Printf("Failed to write JSON response: %v", err)
+	}
 }
 
+// listTasks returns tasks belonging to the authenticated user.
 func listTasks(w http.ResponseWriter, r *http.Request) {
-
-	// 1. Get the authenticated user ID from the JWT middleware
 	userID, ok := r.Context().Value(userIDKey).(int64)
-
 	if !ok {
 		http.Error(w, "Unauthorized", http.StatusUnauthorized)
 		return
 	}
 
-	// 2. Get only tasks belonging to this user
-	rows, err := db.Query(
+	rows, err := db.QueryContext(
+		r.Context(),
 		`SELECT id, title, is_completed, priority
-         FROM tasks
-         WHERE user_id = ?
-         ORDER BY id`,
+		 FROM tasks
+		 WHERE user_id = ?
+		 ORDER BY id`,
 		userID,
 	)
 
@@ -109,21 +174,21 @@ func listTasks(w http.ResponseWriter, r *http.Request) {
 	tasks := []Task{}
 
 	for rows.Next() {
-		var t Task
+		var task Task
 		var done int
 
 		if err := rows.Scan(
-			&t.ID,
-			&t.Text,
+			&task.ID,
+			&task.Text,
 			&done,
-			&t.Priority,
+			&task.Priority,
 		); err != nil {
 			http.Error(w, "database error", http.StatusInternalServerError)
 			return
 		}
 
-		t.Completed = done == 1
-		tasks = append(tasks, t)
+		task.Completed = done == 1
+		tasks = append(tasks, task)
 	}
 
 	if err := rows.Err(); err != nil {
@@ -134,9 +199,8 @@ func listTasks(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, tasks)
 }
 
+// createTask creates a task owned by the authenticated user.
 func createTask(w http.ResponseWriter, r *http.Request) {
-
-	// Get the authenticated user ID from the middleware
 	userID, ok := r.Context().Value(userIDKey).(int64)
 	if !ok {
 		http.Error(w, "Unauthorized", http.StatusUnauthorized)
@@ -158,9 +222,8 @@ func createTask(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Save the task and its owner.
-	// MySQL will still use DEFAULT 3 for priority.
-	result, err := db.Exec(
+	result, err := db.ExecContext(
+		r.Context(),
 		"INSERT INTO tasks (title, user_id) VALUES (?, ?)",
 		text,
 		userID,
@@ -171,7 +234,11 @@ func createTask(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	id, _ := result.LastInsertId()
+	id, err := result.LastInsertId()
+	if err != nil {
+		http.Error(w, "database error", http.StatusInternalServerError)
+		return
+	}
 
 	writeJSON(w, http.StatusCreated, Task{
 		ID:       id,
@@ -180,22 +247,20 @@ func createTask(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+// updateTask updates completion and/or priority of an owned task.
 func updateTask(w http.ResponseWriter, r *http.Request) {
-	// 1. Get the authenticated user ID
 	userID, ok := r.Context().Value(userIDKey).(int64)
 	if !ok {
 		http.Error(w, "Unauthorized", http.StatusUnauthorized)
 		return
 	}
 
-	// 2. Read the task ID from the URL
 	id, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
 	if err != nil || id <= 0 {
 		http.Error(w, "invalid id", http.StatusBadRequest)
 		return
 	}
 
-	// 3. Decode the fields to update
 	var body struct {
 		Completed *bool `json:"completed"`
 		Priority  *int  `json:"priority"`
@@ -213,14 +278,19 @@ func updateTask(w http.ResponseWriter, r *http.Request) {
 
 	if body.Priority != nil &&
 		(*body.Priority < 1 || *body.Priority > 3) {
-		http.Error(w, "priority must be 1, 2 or 3", http.StatusBadRequest)
+		http.Error(
+			w,
+			"priority must be 1, 2 or 3",
+			http.StatusBadRequest,
+		)
 		return
 	}
 
-	// 4. Check whether the task belongs to this user
+	// Verify task ownership.
 	var exists int
 
-	err = db.QueryRow(
+	err = db.QueryRowContext(
+		r.Context(),
 		"SELECT 1 FROM tasks WHERE id = ? AND user_id = ?",
 		id,
 		userID,
@@ -236,17 +306,18 @@ func updateTask(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// 5. Update completion if provided
+	// Update completion when provided.
 	if body.Completed != nil {
 		done := 0
 		if *body.Completed {
 			done = 1
 		}
 
-		_, err := db.Exec(
+		_, err := db.ExecContext(
+			r.Context(),
 			`UPDATE tasks
-             SET is_completed = ?
-             WHERE id = ? AND user_id = ?`,
+			 SET is_completed = ?
+			 WHERE id = ? AND user_id = ?`,
 			done,
 			id,
 			userID,
@@ -258,12 +329,13 @@ func updateTask(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	// 6. Update priority if provided
+	// Update priority when provided.
 	if body.Priority != nil {
-		_, err := db.Exec(
+		_, err := db.ExecContext(
+			r.Context(),
 			`UPDATE tasks
-             SET priority = ?
-             WHERE id = ? AND user_id = ?`,
+			 SET priority = ?
+			 WHERE id = ? AND user_id = ?`,
 			*body.Priority,
 			id,
 			userID,
@@ -275,27 +347,25 @@ func updateTask(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	// 7. Return success
 	w.WriteHeader(http.StatusNoContent)
 }
 
+// deleteTask deletes a task only if it belongs to the user.
 func deleteTask(w http.ResponseWriter, r *http.Request) {
-	// 1. Get the authenticated user ID
 	userID, ok := r.Context().Value(userIDKey).(int64)
 	if !ok {
 		http.Error(w, "Unauthorized", http.StatusUnauthorized)
 		return
 	}
 
-	// 2. Get the task ID from the URL
 	id, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
 	if err != nil || id <= 0 {
 		http.Error(w, "invalid id", http.StatusBadRequest)
 		return
 	}
 
-	// 3. Delete only if the task belongs to this user
-	result, err := db.Exec(
+	result, err := db.ExecContext(
+		r.Context(),
 		"DELETE FROM tasks WHERE id = ? AND user_id = ?",
 		id,
 		userID,
@@ -306,7 +376,6 @@ func deleteTask(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// 4. Check whether a task was deleted
 	affected, err := result.RowsAffected()
 	if err != nil {
 		http.Error(w, "database error", http.StatusInternalServerError)
@@ -318,6 +387,5 @@ func deleteTask(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// 5. Successful deletion
 	w.WriteHeader(http.StatusNoContent)
 }
