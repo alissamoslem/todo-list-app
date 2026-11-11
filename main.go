@@ -61,6 +61,9 @@ func main() {
 	// تغيير MySQL: حُذف CREATE TABLE و ALTER TABLE لأن الجدول يُنشأ من ملف schema.sql
 
 	mux := http.NewServeMux()
+	mux.HandleFunc("POST /api/auth/login", loginHandler)
+	mux.HandleFunc("POST /api/auth/register", registerHandler)
+	mux.HandleFunc("GET /api/auth/me", authMiddleware(meHandler))
 	mux.HandleFunc("GET /api/tasks", listTasks)
 	mux.HandleFunc("POST /api/tasks", createTask)
 	mux.HandleFunc("PATCH /api/tasks/{id}", updateTask)

@@ -11,12 +11,35 @@ const tasksCompletedCount = document.querySelector("#tasks-completed-count");
 const PRIORITY_NAMES = { 1: "Priority 1", 2: "Priority 2", 3: "Priority 3" };
 
 async function api(url, options = {}) {
-  const response = await fetch(url, {
-    headers: { "Content-Type": "application/json" },
-    ...options,
-  });
-  if (!response.ok) throw new Error(`Request failed: ${response.status}`);
-  return response.status === 204 ? null : response.json();
+    const token = localStorage.getItem("token");
+
+    if (!token) {
+        window.location.replace("/login.html");
+        throw new Error("Not authenticated");
+    }
+
+    const response = await fetch(url, {
+        ...options,
+        headers: {
+            "Content-Type": "application/json",
+            ...options.headers,
+            "Authorization": `Bearer ${token}`
+        }
+    });
+
+    if (response.status === 401) {
+        localStorage.removeItem("token");
+        window.location.replace("/login.html");
+        throw new Error("Session expired");
+    }
+
+    if (!response.ok) {
+        throw new Error(`Request failed: ${response.status}`);
+    }
+
+    return response.status === 204
+        ? null
+        : response.json();
 }
 
 // جديد: ترتيب المهام حسب الأولوية، وعند التساوي حسب رقم المهمة (أي ترتيب الإضافة)
@@ -83,7 +106,10 @@ function renderTask(task) {
   deleteButton.className = "delete-button";
   deleteButton.textContent = "×";
   deleteButton.setAttribute("aria-label", `Delete “${task.text}”`);
-
+  logoutButton.addEventListener("click", () => {
+      localStorage.removeItem("token");
+      window.location.replace("/login.html");
+  });
   checkbox.addEventListener("change", async () => {
     try {
       await api(`/api/tasks/${task.id}`, {
@@ -172,3 +198,11 @@ async function loadTasks() {
 }
 
 loadTasks();
+const logoutButton = document.querySelector("#logout-button");
+
+if (logoutButton) {
+    logoutButton.addEventListener("click", () => {
+        localStorage.removeItem("token");
+        window.location.replace("/login.html");
+    });
+}
