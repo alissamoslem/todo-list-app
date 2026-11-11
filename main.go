@@ -129,10 +129,9 @@ func main() {
 
 	server := &http.Server{
 		Addr:              addr,
-		Handler:           mux,
+		Handler:           corsMiddleware(mux),
 		ReadHeaderTimeout: 5 * time.Second,
 	}
-
 	log.Printf("Server listening on %s", addr)
 
 	log.Fatal(server.ListenAndServe())
