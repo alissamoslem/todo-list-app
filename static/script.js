@@ -241,3 +241,37 @@ async function deleteUser(userId, userName) {
         alert("Deletion failed: " + error.message);
     }
 }
+async function setupAdminButton() {
+    const adminButton = document.querySelector(
+        "#admin-dashboard-button"
+    );
+
+    const token = localStorage.getItem("token");
+
+    if (!token) {
+        window.location.href = "/login.html";
+        return;
+    }
+
+    try {
+        const response = await fetch("/api/auth/me", {
+            headers: {
+                "Authorization": `Bearer ${token}`
+            }
+        });
+
+        if (!response.ok) {
+            throw new Error("Failed to get user information");
+        }
+
+        const user = await response.json();
+
+        if (user.role === "admin") {
+            adminButton.hidden = false;
+        }
+
+    } catch (error) {
+        console.error(error);
+    }
+}
+setupAdminButton();

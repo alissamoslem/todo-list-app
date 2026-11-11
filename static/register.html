@@ -4,42 +4,64 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Register | To-Do List</title>
-    <link rel="stylesheet" href="/style.css">
-</head>
-<body>
-    <main>
-        <h1>Create Account</h1>
-        <p>Register to start managing your tasks.</p>
 
-        <form id="register-form">
-            <div>
+    <title>Register | My To-Do List</title>
+
+    <link rel="stylesheet" href="/style.css">
+    <script src="/register.js" defer></script>
+</head>
+
+<body>
+    <main class="auth-card">
+
+        <header class="auth-header">
+            <span class="eyebrow">
+                Start your journey
+            </span>
+
+            <h1>Create Account</h1>
+
+            <p>
+                Join us and start organizing your
+                tasks, one step at a time.
+            </p>
+        </header>
+
+        <form id="register-form" class="auth-form">
+
+            <div class="form-group">
                 <label for="name">Full Name</label>
+
                 <input
                     type="text"
                     id="name"
-                    placeholder="Enter your name"
+                    name="name"
+                    placeholder="Enter your full name"
                     autocomplete="name"
                     required
                 >
             </div>
 
-            <div>
-                <label for="email">Email</label>
+            <div class="form-group">
+                <label for="email">Email Address</label>
+
                 <input
                     type="email"
                     id="email"
-                    placeholder="Enter your email"
+                    name="email"
+                    placeholder="you@example.com"
                     autocomplete="email"
                     required
                 >
             </div>
 
-            <div>
+            <div class="form-group">
                 <label for="password">Password</label>
+
                 <input
                     type="password"
                     id="password"
+                    name="password"
                     placeholder="At least 8 characters"
                     minlength="8"
                     autocomplete="new-password"
@@ -47,17 +69,27 @@
                 >
             </div>
 
-            <button type="submit">Register</button>
+            <button
+                type="submit"
+                class="button button-primary auth-submit"
+            >
+                Create Account
+            </button>
+
         </form>
 
-        <p id="error-message" role="alert"></p>
+        <p
+            id="error-message"
+            class="auth-error"
+            role="alert"
+            hidden
+        ></p>
 
-        <p>
+        <footer class="auth-footer">
             Already have an account?
-            <a href="/login.html">Login here</a>
-        </p>
-    </main>
+            <a href="/login.html">Log in here</a>
+        </footer>
 
-    <script src="/register.js"></script>
+    </main>
 </body>
 </html>

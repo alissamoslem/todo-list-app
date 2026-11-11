@@ -4,48 +4,78 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Login | To-Do List</title>
-    <link rel="stylesheet" href="/style.css">
-</head>
-<body>
-    <main>
-        <h1>Welcome Back!</h1>
-        <p>Log in to manage your tasks.</p>
 
-        <form id="login-form">
-            <div>
-                <label for="email">Email</label>
+    <title>Login | My To-Do List</title>
+
+    <link rel="stylesheet" href="/style.css">
+    <script src="/login.js" defer></script>
+</head>
+
+<body>
+    <main class="auth-card">
+
+        <header class="auth-header">
+            <span class="eyebrow">
+                A little progress, every day
+            </span>
+
+            <h1>Welcome Back!</h1>
+
+            <p>
+                Log in to your account and keep making
+                progress on your tasks.
+            </p>
+        </header>
+
+        <form id="login-form" class="auth-form">
+
+            <div class="form-group">
+                <label for="email">Email Address</label>
+
                 <input
                     type="email"
                     id="email"
-                    placeholder="Enter your email"
+                    name="email"
+                    placeholder="you@example.com"
                     autocomplete="email"
                     required
                 >
             </div>
 
-            <div>
+            <div class="form-group">
                 <label for="password">Password</label>
+
                 <input
                     type="password"
                     id="password"
+                    name="password"
                     placeholder="Enter your password"
                     autocomplete="current-password"
                     required
                 >
             </div>
 
-            <button type="submit">Login</button>
+            <button
+                type="submit"
+                class="button button-primary auth-submit"
+            >
+                Log In
+            </button>
+
         </form>
 
-        <p id="error-message" role="alert"></p>
+        <p
+            id="error-message"
+            class="auth-error"
+            role="alert"
+            hidden
+        ></p>
 
-        <p>
+        <footer class="auth-footer">
             Don't have an account?
-            <a href="/register.html">Register here</a>
-        </p>
-    </main>
+            <a href="/register.html">Create an account</a>
+        </footer>
 
-    <script src="/login.js"></script>
+    </main>
 </body>
 </html>
