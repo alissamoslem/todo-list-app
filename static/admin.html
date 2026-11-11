@@ -1,0 +1,66 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport"
+          content="width=device-width, initial-scale=1.0">
+    <title>Admin Dashboard</title>
+    <link rel="stylesheet" href="/style.css">
+    <link rel="stylesheet" href="/admin.css">
+    <script src="/admin.js" defer></script>
+</head>
+<body>
+    <main class="admin-container">
+        <h1>Admin Dashboard</h1>
+        <p>Manage registered users and view their tasks.</p>
+
+        <a href="/">Back to To-Do List</a>
+
+        <h2>Registered Users</h2>
+        <p id="admin-message" role="status"></p>
+        <div id="users-list"></div>
+
+        <h2>All Tasks</h2>
+        <div id="admin-tasks-list"></div>
+    </main>
+    <div id="delete-modal" class="modal-overlay" hidden>
+    <div class="modal-content"
+         role="dialog"
+         aria-modal="true"
+         aria-labelledby="delete-modal-title">
+
+        <h2 id="delete-modal-title">Delete User</h2>
+
+        <p id="delete-warning"></p>
+
+        <p>
+            This action is permanent and will also
+            delete all tasks belonging to this user.
+        </p>
+
+        <label for="delete-confirmation">
+            Type <strong>DELETE</strong> to confirm:
+        </label>
+
+        <input
+            type="text"
+            id="delete-confirmation"
+            autocomplete="off"
+        >
+
+        <p id="delete-error" role="alert"></p>
+
+        <div class="modal-actions">
+            <button type="button" id="cancel-delete">
+                Cancel
+            </button>
+
+            <button type="button" id="confirm-delete" disabled>
+                Delete User
+            </button>
+        </div>
+    </div>
+</div>
+</body>
+</html>

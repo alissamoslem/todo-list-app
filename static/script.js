@@ -206,3 +206,38 @@ if (logoutButton) {
         window.location.replace("/login.html");
     });
 }
+async function deleteUser(userId, userName) {
+    const confirmation = prompt(
+        `Delete ${userName} and all their tasks?\n\nType DELETE to confirm:`
+    );
+
+    if (confirmation !== "DELETE") {
+        return;
+    }
+
+    const token = localStorage.getItem("token");
+
+    try {
+        const response = await fetch(
+            `/api/admin/users/${userId}`,
+            {
+                method: "DELETE",
+                headers: {
+                    "Authorization": `Bearer ${token}`,
+                    "Content-Type": "application/json"
+                },
+                body: JSON.stringify({
+                    confirmation: confirmation
+                })
+            }
+        );
+
+        if (!response.ok) {
+            throw new Error(`Request failed: ${response.status}`);
+        }
+
+        alert("User deleted successfully");
+    } catch (error) {
+        alert("Deletion failed: " + error.message);
+    }
+}

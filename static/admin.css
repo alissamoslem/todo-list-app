@@ -1,0 +1,167 @@
+
+/* Admin Dashboard */
+
+.admin-container {
+    width: min(100%, 900px);
+    padding: 36px;
+    border-radius: 24px;
+    background: var(--white);
+    box-shadow: 0 24px 70px rgba(43, 98, 123, 0.12);
+    border: 1px solid var(--line);
+}
+
+.admin-container h1 {
+    color: var(--ink);
+    margin-bottom: 12px;
+}
+
+.admin-container h2 {
+    color: var(--ink);
+    margin: 30px 0 15px;
+}
+
+.admin-container > p {
+    color: var(--muted);
+}
+
+.admin-user-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 16px;
+    padding: 16px;
+    margin-bottom: 10px;
+    border: 1px solid var(--line);
+    border-radius: 13px;
+    background: #fcfeff;
+}
+
+.admin-user-row span {
+    overflow-wrap: anywhere;
+}
+
+.delete-user-btn {
+    flex: 0 0 auto;
+    padding: 10px 14px;
+    border: none;
+    border-radius: 9px;
+    background: #dc2626;
+    color: white;
+    font-weight: 700;
+    cursor: pointer;
+}
+
+.delete-user-btn:hover {
+    background: #b91c1c;
+}
+
+#admin-tasks-list p {
+    padding: 14px;
+    margin: 8px 0;
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    background: var(--ice);
+}
+
+#admin-message {
+    color: var(--blue-deep);
+    font-weight: 600;
+}
+
+/* Delete confirmation modal */
+
+#delete-modal[hidden] {
+    display: none !important;
+}
+
+#delete-modal:not([hidden]) {
+    position: fixed;
+    inset: 0;
+    z-index: 9999;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 20px;
+    background: rgba(24, 56, 73, 0.65);
+}
+
+#delete-modal .modal-content {
+    width: min(100%, 440px);
+    padding: 30px;
+    border-radius: 20px;
+    background: var(--white);
+    color: var(--ink);
+    box-shadow: 0 24px 70px rgba(0, 0, 0, 0.25);
+}
+
+#delete-modal h2 {
+    font-size: 1.5rem;
+    margin-bottom: 16px;
+}
+
+#delete-modal p {
+    line-height: 1.6;
+    color: var(--muted);
+}
+
+#delete-modal label {
+    display: block;
+    margin-top: 20px;
+    font-weight: 650;
+}
+
+#delete-confirmation {
+    width: 100%;
+    margin-top: 10px;
+}
+
+#delete-error {
+    color: #dc2626 !important;
+    font-size: 0.9rem;
+}
+
+.modal-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 12px;
+    margin-top: 24px;
+}
+
+#cancel-delete,
+#confirm-delete {
+    padding: 11px 18px;
+    border: none;
+    border-radius: 10px;
+    font-weight: 700;
+    cursor: pointer;
+}
+
+#cancel-delete {
+    background: var(--mint);
+    color: var(--ink);
+}
+
+#confirm-delete {
+    background: #dc2626;
+    color: white;
+}
+
+#confirm-delete:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+}
+
+@media (max-width: 600px) {
+    .admin-container {
+        padding: 22px;
+    }
+
+    .admin-user-row {
+        flex-direction: column;
+        align-items: stretch;
+    }
+
+    .modal-actions {
+        flex-wrap: wrap;
+    }
+}
