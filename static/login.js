@@ -31,13 +31,13 @@ loginForm.addEventListener("submit", async (event) => {
         }
 
         const data = await response.json();
-
-        // Store the JWT
         localStorage.setItem("token", data.token);
 
-        // Redirect to the To-Do List
-        window.location.href = "/";
-
+        if (data.user.role === "admin") {
+            window.location.href = "/admin.html";
+        } else {
+            window.location.href = "/";
+        }
     } catch (error) {
         errorMessage.textContent = error.message;
     }

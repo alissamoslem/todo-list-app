@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"database/sql"
 	"net/http"
 	"os"
 	"strings"
@@ -85,5 +86,46 @@ func authMiddleware(next http.HandlerFunc) http.HandlerFunc {
 
 		// 7. Continue to the protected handler.
 		next(w, r.WithContext(ctx))
+	}
+
+}
+
+func adminMiddleware(next http.HandlerFunc) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		// 1. Get the authenticated user ID
+		userID, ok := r.Context().Value(userIDKey).(int64)
+		if !ok {
+			http.Error(w, "Unauthorized", http.StatusUnauthorized)
+			return
+		}
+
+		// 2. Get the user's current role from MySQL
+		var role string
+
+		err := db.QueryRow(
+			"SELECT role FROM users WHERE id = ?",
+			userID,
+		).Scan(&role)
+
+		// 3. User no longer exists
+		if err == sql.ErrNoRows {
+			http.Error(w, "Unauthorized", http.StatusUnauthorized)
+			return
+		}
+
+		// 4. Handle database errors
+		if err != nil {
+			http.Error(w, "database error", http.StatusInternalServerError)
+			return
+		}
+
+		// 5. Check admin permission
+		if role != "admin" {
+			http.Error(w, "Forbidden", http.StatusForbidden)
+			return
+		}
+
+		// 6. Allow the admin request
+		next(w, r)
 	}
 }
